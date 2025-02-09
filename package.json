@@ -26,8 +26,10 @@
     "expo": "~52.0.31",
     "expo-blur": "~14.0.3",
     "expo-constants": "~17.0.5",
+    "expo-document-picker": "~13.0.3",
     "expo-font": "~13.0.3",
     "expo-haptics": "~14.0.1",
+    "expo-image-picker": "~16.0.5",
     "expo-linking": "~7.0.5",
     "expo-router": "~4.0.17",
     "expo-splash-screen": "~0.29.21",
@@ -45,9 +47,7 @@
     "react-native-web": "~0.19.13",
     "react-native-webview": "13.12.5",
     "react-redux": "^9.2.0",
-    "redux-persist": "^6.0.0",
-    "expo-document-picker": "~13.0.3",
-    "expo-image-picker": "~16.0.5"
+    "redux-persist": "^6.0.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

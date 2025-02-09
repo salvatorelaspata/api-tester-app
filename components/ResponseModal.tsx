@@ -2,8 +2,10 @@ import React from 'react';
 import {
     BottomSheetModal,
     BottomSheetView
-  } from '@gorhom/bottom-sheet';
-import { Text, StyleSheet, Button, ScrollView } from 'react-native';
+} from '@gorhom/bottom-sheet';
+import { Text, StyleSheet, ScrollView, View } from 'react-native';
+import CollapsibleSection from './CollapsibleSection';
+import JsonViewer from './JsonViewer';
 
 interface ResponseData {
     error?: string;
@@ -34,16 +36,23 @@ export default function ResponseModal({ bottomSheetModalRef, handleSheetChanges,
                         <Text style={styles.errorText}>Errore: {response.error}</Text>
                     ) : (
                         <ScrollView style={styles.scrollView}>
-                            <Text style={styles.statusText}>Stato: {response.status}</Text>
-                            <Text style={styles.timeText}>Tempo: {response.time}ms</Text>
-                            <Text style={styles.headerTitle}>Headers:</Text>
-                            <Text style={styles.codeBlock}>
-                                {JSON.stringify(response.headers, null, 2)}
-                            </Text>
-                            <Text style={styles.headerTitle}>Body:</Text>
-                            <Text style={styles.codeBlock}>
-                                {JSON.stringify(response.data, null, 2)}
-                            </Text>
+                            <View style={styles.statusContainer}>
+                                <Text style={[
+                                    styles.statusText,
+                                    response.status && response.status >= 400 ? styles.errorStatus : styles.successStatus
+                                ]}>
+                                    {response.status}
+                                </Text>
+                                <Text style={styles.timeText}>{response.time}ms</Text>
+                            </View>
+
+                            <CollapsibleSection title="Headers">
+                                <JsonViewer data={response.headers || {}} />
+                            </CollapsibleSection>
+
+                            <CollapsibleSection title="Body" initiallyExpanded={true}>
+                                <JsonViewer data={response.data || null} />
+                            </CollapsibleSection>
                         </ScrollView>
                     )
                 ) : (
@@ -51,7 +60,7 @@ export default function ResponseModal({ bottomSheetModalRef, handleSheetChanges,
                 )}
             </BottomSheetView>
         </BottomSheetModal>
-    )
+    );
 }
 
 const styles = StyleSheet.create({
@@ -62,28 +71,30 @@ const styles = StyleSheet.create({
     scrollView: {
         flex: 1,
     },
+    statusContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 16,
+        gap: 12,
+    },
     statusText: {
-        fontSize: 18,
+        fontSize: 24,
         fontWeight: 'bold',
-        marginBottom: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 8,
+    },
+    successStatus: {
+        backgroundColor: '#e8f5e9',
+        color: '#2e7d32',
+    },
+    errorStatus: {
+        backgroundColor: '#ffebee',
+        color: '#c62828',
     },
     timeText: {
         fontSize: 16,
-        marginBottom: 16,
         color: '#666',
-    },
-    headerTitle: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        marginTop: 12,
-        marginBottom: 8,
-    },
-    codeBlock: {
-        fontFamily: 'monospace',
-        backgroundColor: '#f5f5f5',
-        padding: 12,
-        borderRadius: 8,
-        fontSize: 14,
     },
     errorText: {
         color: '#d32f2f',

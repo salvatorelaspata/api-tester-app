@@ -4,12 +4,16 @@ import React from 'react';
 import { useRequestHistory } from '@/hooks/useRequestHistory';
 import MethodPicker, { HttpMethod } from '@/components/MethodPicker';
 import KeyValueTable from '@/components/KeyValueTable';
+import SaveToCollectionModal from '@/components/SaveToCollectionModal';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModal, BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import ResponseModal from '@/components/ResponseModal';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { useLocalSearchParams } from 'expo-router';
+import { useDispatch } from 'react-redux';
+import { addRequestToCollection } from '@/store/collectionsSlice';
+import { Ionicons } from '@expo/vector-icons';
 
 interface FileData {
   uri: string;
@@ -55,6 +59,9 @@ export default function RequestScreen() {
   ]);
   const [response, setResponse] = useState<ResponseData | null>(null);
   const { saveRequest } = useRequestHistory();
+
+  const saveToCollectionRef = useRef<BottomSheetModal>(null);
+  const dispatch = useDispatch();
 
   useEffect(() => {
     if (params.url) {
@@ -220,6 +227,20 @@ export default function RequestScreen() {
     }
   };
 
+  const handleSaveToCollection = (collectionId: string) => {
+    const requestData = {
+      method,
+      url,
+      headers: headers.filter(h => h.key && h.value),
+      body: bodyType === 'raw' ? body : undefined,
+      timestamp: Date.now()
+    };
+    
+    dispatch(addRequestToCollection({ collectionId, request: requestData }));
+    Alert.alert('Successo', 'Request salvata nella collection');
+    saveToCollectionRef.current?.dismiss();
+  };
+
   return (
     <SafeAreaView style={styles.mainContainer}>
       <GestureHandlerRootView style={styles.container} >
@@ -318,18 +339,31 @@ export default function RequestScreen() {
           </ScrollView>
 
           <View style={styles.sendButtonContainer}>
-            <TouchableOpacity
-              style={styles.sendButton}
-              onPress={handleSendRequest}
-            >
-              <Text style={styles.sendButtonText}>Send Request</Text>
-            </TouchableOpacity>
-
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                style={[styles.button, styles.sendButton]}
+                onPress={handleSendRequest}
+              >
+                <Text style={styles.buttonText}>Invia</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.buttonIcon, styles.saveButton]}
+                onPress={() => saveToCollectionRef.current?.present()}
+              >
+                <Ionicons name="save-outline" size={24} color="white" />
+              </TouchableOpacity>
+              
+            </View>
           </View>
             <ResponseModal 
                 bottomSheetModalRef={bottomSheetModalRef} 
                 handleSheetChanges={handleSheetChanges} 
                 response={response} 
+            />
+            
+            <SaveToCollectionModal
+              bottomSheetModalRef={saveToCollectionRef}
+              onSave={handleSaveToCollection}
             />
         </BottomSheetModalProvider>
       </GestureHandlerRootView>
@@ -421,13 +455,30 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
-  sendButton: {
-    backgroundColor: '#2196F3',
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  button: {
+    flex: 1,
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: 'center',
   },
-  sendButtonText: {
+  buttonIcon: {
+    width: 60,
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendButton: {
+    backgroundColor: '#2196F3',
+  },
+  saveButton: {
+    backgroundColor: '#4CAF50',
+  },
+  buttonText: {
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',

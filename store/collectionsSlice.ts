@@ -1,9 +1,14 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { createAction } from '@reduxjs/toolkit';
 
 // Definiamo le interfacce per i nostri tipi
 interface Request {
   id: string;
-  [key: string]: any; // per permettere proprietà aggiuntive nella request
+  method: string;
+  url: string;
+  headers: any[];
+  body?: string;
+  timestamp: number;
 }
 
 interface Collection {
@@ -19,6 +24,11 @@ interface CollectionsState {
 const initialState: CollectionsState = {
   collections: [],
 };
+
+export const addRequestToCollection = createAction<{
+  collectionId: string;
+  request: Omit<Request, 'id'>;
+}>('collections/addRequestToCollection');
 
 const collectionsSlice = createSlice({
   name: 'collections',
@@ -58,6 +68,17 @@ const collectionsSlice = createSlice({
         }
       }
     },
+  },
+  extraReducers: (builder) => {
+    builder.addCase(addRequestToCollection, (state, action) => {
+      const collection = state.collections.find(c => c.id === action.payload.collectionId);
+      if (collection) {
+        collection.requests.push({
+          id: Date.now().toString(),
+          ...action.payload.request
+        });
+      }
+    });
   },
 });
 

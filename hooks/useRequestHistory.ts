@@ -4,6 +4,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const HISTORY_KEY = 'requestHistory';
 
 // Definizione dell'interfaccia per la richiesta
+interface Header {
+  key: string;
+  value: string;
+  isFile: boolean;
+  file?: FileData;
+}
+
+interface FileData {
+  uri: string;
+  type: string;
+  name: string;
+  size: number;
+}
+
 interface RequestItem {
   url: string;
   method: string;
@@ -46,6 +60,6 @@ export function useRequestHistory() {
   return {
     history,
     saveRequest,
-    reloadHistory: loadHistory  // Esportiamo la funzione di ricaricamento
+    reloadHistory: loadHistory
   };
 }
