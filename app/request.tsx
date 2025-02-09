@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef } from 'react';
-import { View, TextInput, Button, ScrollView, Text, StyleSheet, TouchableOpacity, SafeAreaView } from 'react-native';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { View, TextInput, Button, ScrollView, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert } from 'react-native';
 import React from 'react';
 import { useRequestHistory } from '@/hooks/useRequestHistory';
 import MethodPicker, { HttpMethod } from '@/components/MethodPicker';
@@ -7,11 +7,22 @@ import KeyValueTable from '@/components/KeyValueTable';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModal, BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import ResponseModal from '@/components/ResponseModal';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import { useLocalSearchParams } from 'expo-router';
 
+interface FileData {
+  uri: string;
+  type: string;
+  name: string;
+  size: number;
+}
 
 interface Header {
   key: string;
   value: string;
+  isFile: boolean;
+  file?: FileData;
 }
 
 interface ResponseData {
@@ -22,6 +33,7 @@ interface ResponseData {
   error?: string;
 }
 
+type BodyType = 'raw' | 'form-data';
 
 interface RequestItem {
   method: HttpMethod;
@@ -31,12 +43,33 @@ interface RequestItem {
 }
 
 export default function RequestScreen() {
+  const params = useLocalSearchParams();
+  
   const [url, setUrl] = useState('https://jsonplaceholder.typicode.com/todos/1');
   const [method, setMethod] = useState<HttpMethod>('GET');
-  const [headers, setHeaders] = useState<Header[]>([{ key: '', value: '' }]);
+  const [headers, setHeaders] = useState<Header[]>([{ key: '', value: '', isFile: false }]);
   const [body, setBody] = useState('');
+  const [bodyType, setBodyType] = useState<BodyType>('raw');
+  const [formData, setFormData] = useState<Array<{ key: string; value: string; isFile: boolean; file?: FileData }>>([
+    { key: '', value: '', isFile: false }
+  ]);
   const [response, setResponse] = useState<ResponseData | null>(null);
   const { saveRequest } = useRequestHistory();
+
+  useEffect(() => {
+    if (params.url) {
+      setUrl(params.url.toString());
+    }
+    if (params.method) {
+      setMethod(params.method as HttpMethod);
+    }
+    if (params.headers) {
+      setHeaders(JSON.parse(params.headers.toString()));
+    }
+    if (params.body) {
+      setBody(params.body.toString());
+    }
+  }, [params.url, params.method, params.headers, params.body]);
 
   const handleSendRequest = async () => {
     try {
@@ -46,11 +79,37 @@ export default function RequestScreen() {
       }, {});
 
       const startTime = Date.now();
+      
+      let requestBody: string | FormData | undefined;
+      
+      if (method === 'POST' || method === 'PUT') {
+        if (bodyType === 'raw') {
+          requestBody = body;
+        } else {
+          const formDataObj = new FormData();
+          formData.forEach(({ key, value, isFile, file }) => {
+            if (key && value) {
+              if (isFile && file) {
+                formDataObj.append(key, {
+                  uri: file.uri,
+                  type: file.type,
+                  name: file.name,
+                } as unknown as Blob);
+              } else {
+                formDataObj.append(key, value);
+              }
+            }
+          });
+          requestBody = formDataObj;
+        }
+      }
 
       const res = await fetch(url, {
         method,
-        headers: headersObj,
-        body: body ? body : undefined
+        headers: bodyType === 'raw' ? headersObj : Object.fromEntries(
+          Object.entries(headersObj).filter(([key]) => key.toLowerCase() !== 'content-type')
+        ),
+        body: requestBody
       });
 
       const endTime = Date.now();
@@ -67,14 +126,20 @@ export default function RequestScreen() {
         method,
         url,
         timestamp: Date.now(),
-        status: res.status
+        status: res.status,
+        headers: headers,
+        body: bodyType === 'raw' ? body : undefined
       });
+
+      bottomSheetModalRef.current?.present();
 
     } catch (error) {
       if (error instanceof Error) {
         setResponse({
           error: error.message
         });
+        
+        bottomSheetModalRef.current?.present();
       }
     }
   };
@@ -85,8 +150,74 @@ export default function RequestScreen() {
     console.log('handleSheetChanges', index);
   };
 
-  const handlePresentModalPress = () => {
-    bottomSheetModalRef.current?.present();
+  const handleFilePick = async (index: number, type: 'header' | 'formData') => {
+    try {
+      Alert.alert(
+        'Seleziona file',
+        'Scegli da dove selezionare il file',
+        [
+          {
+            text: 'Foto',
+            onPress: async () => {
+              const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.All,
+                allowsEditing: true,
+                quality: 1,
+              });
+
+              if (!result.canceled && result.assets[0]) {
+                const fileData = {
+                  uri: result.assets[0].uri,
+                  type: 'image/jpeg',
+                  name: 'image.jpg',
+                  size: result.assets[0].fileSize || 0,
+                };
+
+                updateFileData(fileData, index, type);
+              }
+            },
+          },
+          {
+            text: 'Documento',
+            onPress: async () => {
+              const result = await DocumentPicker.getDocumentAsync({
+                type: '*/*',
+                copyToCacheDirectory: true,
+              });
+
+              if (!result.canceled && result.assets[0]) {
+                const fileData = {
+                  uri: result.assets[0].uri,
+                  type: result.assets[0].mimeType || 'application/octet-stream',
+                  name: result.assets[0].name,
+                  size: result.assets[0].size || 0,
+                };
+
+                updateFileData(fileData, index, type);
+              }
+            },
+          },
+          {
+            text: 'Annulla',
+            style: 'cancel',
+          },
+        ],
+      );
+    } catch (err) {
+      console.error('Errore nella selezione del file:', err);
+    }
+  };
+
+  const updateFileData = (fileData: FileData, index: number, type: 'header' | 'formData') => {
+    if (type === 'header') {
+      const newHeaders = [...headers];
+      newHeaders[index] = { ...newHeaders[index], value: fileData.name, file: fileData };
+      setHeaders(newHeaders);
+    } else {
+      const newFormData = [...formData];
+      newFormData[index] = { ...newFormData[index], value: fileData.name, file: fileData };
+      setFormData(newFormData);
+    }
   };
 
   return (
@@ -108,19 +239,60 @@ export default function RequestScreen() {
             </View>
 
             <Text style={styles.sectionTitle}>Headers</Text>
-            <KeyValueTable data={headers} onChange={setHeaders} />
+            <KeyValueTable 
+              data={headers} 
+              onChange={setHeaders}
+              showFileOption
+              onFilePick={(index) => handleFilePick(index, 'header')}
+            />
 
             {(method === 'POST' || method === 'PUT') && (
               <>
                 <Text style={styles.sectionTitle}>Body</Text>
-                <TextInput
-                  style={styles.bodyInput}
-                  multiline
-                  numberOfLines={10}
-                  placeholder="Raw JSON body"
-                  value={body}
-                  onChangeText={setBody}
-                />
+                <View style={styles.segmentedButtonContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.segmentedButton,
+                      bodyType === 'raw' && styles.segmentedButtonActive
+                    ]}
+                    onPress={() => setBodyType('raw')}
+                  >
+                    <Text style={[
+                      styles.segmentedButtonText,
+                      bodyType === 'raw' && styles.segmentedButtonTextActive
+                    ]}>Raw</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.segmentedButton,
+                      bodyType === 'form-data' && styles.segmentedButtonActive
+                    ]}
+                    onPress={() => setBodyType('form-data')}
+                  >
+                    <Text style={[
+                      styles.segmentedButtonText,
+                      bodyType === 'form-data' && styles.segmentedButtonTextActive
+                    ]}>Form Data</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {bodyType === 'raw' ? (
+                  <TextInput
+                    style={styles.bodyInput}
+                    multiline
+                    numberOfLines={10}
+                    placeholder="Raw JSON body"
+                    value={body}
+                    onChangeText={setBody}
+                  />
+                ) : (
+                  <KeyValueTable
+                    data={formData}
+                    onChange={setFormData}
+                    showFileOption
+                    onFilePick={(index) => handleFilePick(index, 'formData')}
+                  />
+                )}
               </>
             )}
 
@@ -153,11 +325,6 @@ export default function RequestScreen() {
               <Text style={styles.sendButtonText}>Send Request</Text>
             </TouchableOpacity>
 
-          <Button
-            onPress={handlePresentModalPress}
-            title="Present Modal"
-            color="black"
-          />
           </View>
             <ResponseModal 
                 bottomSheetModalRef={bottomSheetModalRef} 
@@ -264,5 +431,30 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  segmentedButtonContainer: {
+    flexDirection: 'row',
+    marginBottom: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#2196F3',
+    overflow: 'hidden',
+  },
+  segmentedButton: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+  },
+  segmentedButtonActive: {
+    backgroundColor: '#2196F3',
+  },
+  segmentedButtonText: {
+    color: '#2196F3',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  segmentedButtonTextActive: {
+    color: '#ffffff',
   },
 });

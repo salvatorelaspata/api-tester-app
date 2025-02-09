@@ -7,7 +7,7 @@ const HISTORY_KEY = 'requestHistory';
 interface RequestItem {
   url: string;
   method: string;
-  headers?: Record<string, string>;
+  headers?: Header[];
   body?: string;
   timestamp?: number;
   status: number;
@@ -16,10 +16,6 @@ interface RequestItem {
 export function useRequestHistory() {
   // Specifichiamo il tipo dello stato
   const [history, setHistory] = useState<RequestItem[]>([]);
-
-  useEffect(() => {
-    loadHistory();
-  }, []);
 
   const loadHistory = async () => {
     try {
@@ -31,6 +27,10 @@ export function useRequestHistory() {
       console.error('Error loading history:', error);
     }
   };
+
+  useEffect(() => {
+    loadHistory();
+  }, []);
 
   // Aggiungiamo il tipo al parametro request
   const saveRequest = async (request: RequestItem) => {
@@ -45,6 +45,7 @@ export function useRequestHistory() {
 
   return {
     history,
-    saveRequest
+    saveRequest,
+    reloadHistory: loadHistory  // Esportiamo la funzione di ricaricamento
   };
 }
