@@ -45,6 +45,15 @@ export default function RootLayout() {
               ),
             }}
           />
+          <Tabs.Screen  
+            name="credentials"
+            options={{
+              title: 'Credentials',
+              tabBarIcon: ({ color, size }) => (
+                <Ionicons name="key-outline" size={size} color={color} />
+              ),
+            }}
+          />
           <Tabs.Screen
             name="history"
             options={{
