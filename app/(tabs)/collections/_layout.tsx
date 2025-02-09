@@ -8,6 +8,7 @@ export default function CollectionsLayout() {
         <Provider store={store}>
             <PersistGate loading={null} persistor={persistor}>
                 <Stack>
+                    <Stack.Screen name="index" options={{ headerShown: false }} />
                     <Stack.Screen name="[id]" options={{ title: 'Collections' }} />
                 </Stack>
             </PersistGate>

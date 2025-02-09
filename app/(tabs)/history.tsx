@@ -3,6 +3,7 @@ import { useRequestHistory } from '@/hooks/useRequestHistory';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback } from 'react';
+import HeaderText from '@/components/HeaderText';
 
 const colorStatus = (status: number) => {
   if (status >= 200 && status < 300) {
@@ -50,7 +51,7 @@ export default function HistoryScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Request History</Text>
+      <HeaderText title="Request History" />
       <FlatList
         data={history}
         renderItem={renderItem}

@@ -57,7 +57,7 @@ export default function KeyValueTable({ data, onChange, showFileOption, onFilePi
               </Text>
             </TouchableOpacity>
           )}
-          {showFileOption && item.isFile && (
+          {showFileOption && item.isFile ? (
             <TouchableOpacity
               style={styles.filePickButton}
               onPress={() => onFilePick?.(index)}
@@ -66,13 +66,14 @@ export default function KeyValueTable({ data, onChange, showFileOption, onFilePi
                 {item.file ? 'Change File' : 'Pick File'}
               </Text>
             </TouchableOpacity>
-          )}
-          <TextInput
-            style={styles.input}
-            placeholder="Value"
+          ) : (
+            <TextInput
+              style={styles.input}
+              placeholder="Value"
             value={item.value}
             onChangeText={(value) => handleChange(index, 'value', value)}
-          />
+            />
+          )}
           <Button title="-" onPress={() => handleRemove(index)} />
         </View>
       ))}

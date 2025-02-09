@@ -4,6 +4,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { addCollection } from '@/store/collectionsSlice';
 import { useState } from 'react';
 import { router } from 'expo-router';
+import HeaderText from '@/components/HeaderText';
 
 export default function CollectionsScreen() {
   const collections = useSelector((state: any) => state.collections.collections);
@@ -29,7 +30,7 @@ export default function CollectionsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Collections</Text>
+      <HeaderText title="Collections" />
       
       <View style={styles.addContainer}>
         <TextInput

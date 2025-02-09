@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { View, TextInput, Button, ScrollView, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert } from 'react-native';
+import { View, TextInput, Button, ScrollView, Text, StyleSheet, TouchableOpacity, SafeAreaView, Alert, ActivityIndicator } from 'react-native';
 import React from 'react';
 import { useRequestHistory } from '@/hooks/useRequestHistory';
 import MethodPicker, { HttpMethod } from '@/components/MethodPicker';
@@ -14,6 +14,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { useDispatch } from 'react-redux';
 import { addRequestToCollection } from '@/store/collectionsSlice';
 import { Ionicons } from '@expo/vector-icons';
+import HeaderText from '@/components/HeaderText';
 
 interface FileData {
   uri: string;
@@ -46,6 +47,20 @@ interface RequestItem {
   status: number;
 }
 
+interface FormDataItem {
+  key: string;
+  type: 'text' | 'file';
+  value?: string;
+  file?: FileData;
+}
+
+interface KeyValuePair {
+  key: string;
+  value: string;
+  isFile: boolean;
+  file?: FileData;
+}
+
 export default function RequestScreen() {
   const params = useLocalSearchParams();
   
@@ -54,14 +69,16 @@ export default function RequestScreen() {
   const [headers, setHeaders] = useState<Header[]>([{ key: '', value: '', isFile: false }]);
   const [body, setBody] = useState('');
   const [bodyType, setBodyType] = useState<BodyType>('raw');
-  const [formData, setFormData] = useState<Array<{ key: string; value: string; isFile: boolean; file?: FileData }>>([
-    { key: '', value: '', isFile: false }
+  const [formData, setFormData] = useState<FormDataItem[]>([
+    { key: '', type: 'text', value: '' }
   ]);
   const [response, setResponse] = useState<ResponseData | null>(null);
   const { saveRequest } = useRequestHistory();
 
   const saveToCollectionRef = useRef<BottomSheetModal>(null);
   const dispatch = useDispatch();
+
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     if (params.url) {
@@ -80,6 +97,7 @@ export default function RequestScreen() {
 
   const handleSendRequest = async () => {
     try {
+      setIsLoading(true);
       const headersObj = headers.reduce<Record<string, string>>((acc, { key, value }) => {
         if (key) acc[key] = value;
         return acc;
@@ -94,15 +112,16 @@ export default function RequestScreen() {
           requestBody = body;
         } else {
           const formDataObj = new FormData();
-          formData.forEach(({ key, value, isFile, file }) => {
-            if (key && value) {
-              if (isFile && file) {
+          formData.forEach(({ key, type, value, file }) => {
+            if (key) {
+              if (type === 'file' && file) {
                 formDataObj.append(key, {
                   uri: file.uri,
                   type: file.type,
                   name: file.name,
-                } as unknown as Blob);
-              } else {
+                  size: file.size
+                } as any);
+              } else if (value) {
                 formDataObj.append(key, value);
               }
             }
@@ -110,12 +129,15 @@ export default function RequestScreen() {
           requestBody = formDataObj;
         }
       }
-
+      
       const res = await fetch(url, {
         method,
-        headers: bodyType === 'raw' ? headersObj : Object.fromEntries(
-          Object.entries(headersObj).filter(([key]) => key.toLowerCase() !== 'content-type')
-        ),
+        headers: bodyType === 'raw' ? headersObj : {
+          ...Object.fromEntries(
+            Object.entries(headersObj).filter(([key]) => key.toLowerCase() !== 'content-type')
+          ),
+          'Accept': 'application/json',
+        },
         body: requestBody
       });
 
@@ -148,6 +170,8 @@ export default function RequestScreen() {
         
         bottomSheetModalRef.current?.present();
       }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -157,7 +181,7 @@ export default function RequestScreen() {
     console.log('handleSheetChanges', index);
   };
 
-  const handleFilePick = async (index: number, type: 'header' | 'formData') => {
+  const handleFilePick = async (index: number, type: 'formData') => {
     try {
       Alert.alert(
         'Seleziona file',
@@ -180,7 +204,7 @@ export default function RequestScreen() {
                   size: result.assets[0].fileSize || 0,
                 };
 
-                updateFileData(fileData, index, type);
+                updateFileData(fileData, index);
               }
             },
           },
@@ -200,7 +224,7 @@ export default function RequestScreen() {
                   size: result.assets[0].size || 0,
                 };
 
-                updateFileData(fileData, index, type);
+                updateFileData(fileData, index);
               }
             },
           },
@@ -215,16 +239,15 @@ export default function RequestScreen() {
     }
   };
 
-  const updateFileData = (fileData: FileData, index: number, type: 'header' | 'formData') => {
-    if (type === 'header') {
-      const newHeaders = [...headers];
-      newHeaders[index] = { ...newHeaders[index], value: fileData.name, file: fileData };
-      setHeaders(newHeaders);
-    } else {
-      const newFormData = [...formData];
-      newFormData[index] = { ...newFormData[index], value: fileData.name, file: fileData };
-      setFormData(newFormData);
-    }
+  const updateFileData = (fileData: FileData, index: number) => {
+    const newFormData = [...formData];
+    newFormData[index] = { 
+      ...newFormData[index], 
+      type: 'file',
+      value: undefined,
+      file: fileData 
+    };
+    setFormData(newFormData);
   };
 
   const handleSaveToCollection = (collectionId: string) => {
@@ -241,13 +264,18 @@ export default function RequestScreen() {
     saveToCollectionRef.current?.dismiss();
   };
 
+  const handleFormDataChange = (data: KeyValuePair[]) => {
+    setFormData(data.map(item => ({
+      ...item,
+      type: item.isFile ? 'file' : 'text'
+    })) as FormDataItem[]);
+  };
+
   return (
     <SafeAreaView style={styles.mainContainer}>
+      <HeaderText title="HTTP Client Request" />
       <GestureHandlerRootView style={styles.container} >
         <BottomSheetModalProvider>
-          <View style={styles.header}>
-            <Text style={styles.title}>HTTP Client Request</Text>
-          </View>
           <ScrollView style={styles.scrollContainer}>
             <View style={styles.inputContainer}>
               <MethodPicker selectedValue={method} onValueChange={setMethod} />
@@ -263,8 +291,7 @@ export default function RequestScreen() {
             <KeyValueTable 
               data={headers} 
               onChange={setHeaders}
-              showFileOption
-              onFilePick={(index) => handleFilePick(index, 'header')}
+              showFileOption={false}
             />
 
             {(method === 'POST' || method === 'PUT') && (
@@ -308,9 +335,14 @@ export default function RequestScreen() {
                   />
                 ) : (
                   <KeyValueTable
-                    data={formData}
-                    onChange={setFormData}
-                    showFileOption
+                    data={formData.map(item => ({
+                      key: item.key,
+                      value: item.value || '',
+                      isFile: item.type === 'file',
+                      file: item.file
+                    }))}
+                    onChange={handleFormDataChange}
+                    showFileOption={true}
                     onFilePick={(index) => handleFilePick(index, 'formData')}
                   />
                 )}
@@ -343,16 +375,21 @@ export default function RequestScreen() {
               <TouchableOpacity
                 style={[styles.button, styles.sendButton]}
                 onPress={handleSendRequest}
+                disabled={isLoading}
               >
-                <Text style={styles.buttonText}>Invia</Text>
+                {isLoading ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <Text style={styles.buttonText}>Invia</Text>
+                )}
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.buttonIcon, styles.saveButton]}
                 onPress={() => saveToCollectionRef.current?.present()}
+                disabled={isLoading}
               >
                 <Ionicons name="save-outline" size={24} color="white" />
               </TouchableOpacity>
-              
             </View>
           </View>
             <ResponseModal 
@@ -378,14 +415,6 @@ const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
     backgroundColor: '#ffffff'
-  },
-  header: {
-    marginHorizontal: 20,
-
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
   },
   scrollContainer: {
     flex: 1,

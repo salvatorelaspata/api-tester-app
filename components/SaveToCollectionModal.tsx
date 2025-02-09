@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
 import { BottomSheetModal, BottomSheetBackdrop, BottomSheetFlatList } from '@gorhom/bottom-sheet';
 import { useSelector, useDispatch } from 'react-redux';
@@ -17,6 +17,7 @@ interface SaveToCollectionModalProps {
 
 export default function SaveToCollectionModal({ bottomSheetModalRef, onSave }: SaveToCollectionModalProps) {
   const [newCollectionName, setNewCollectionName] = useState('');
+  const inputRef = React.useRef<TextInput>(null);
   const collections = useSelector((state: any) => state.collections.collections) as Collection[];
   const dispatch = useDispatch();
 
@@ -24,6 +25,7 @@ export default function SaveToCollectionModal({ bottomSheetModalRef, onSave }: S
     if (newCollectionName.trim()) {
       dispatch(addCollection(newCollectionName.trim()));
       setNewCollectionName('');
+      inputRef.current?.focus();
     }
   };
 
@@ -42,16 +44,20 @@ export default function SaveToCollectionModal({ bottomSheetModalRef, onSave }: S
     </TouchableOpacity>
   );
 
-  const ListHeaderComponent = () => (
+  const ListHeaderComponent = useMemo(() => (
     <>
       <Text style={styles.title}>Salva nella Collection</Text>
       <View style={styles.addContainer}>
         <TextInput
+          ref={inputRef}
           style={styles.input}
           value={newCollectionName}
           onChangeText={setNewCollectionName}
           placeholder="Nome nuova collection"
           placeholderTextColor="#999"
+          autoCorrect={false}
+          blurOnSubmit={false}
+          onSubmitEditing={handleAddCollection}
         />
         <TouchableOpacity 
           style={styles.addButton}
@@ -61,7 +67,7 @@ export default function SaveToCollectionModal({ bottomSheetModalRef, onSave }: S
         </TouchableOpacity>
       </View>
     </>
-  );
+  ), [newCollectionName]);
 
   const ListEmptyComponent = () => (
     <Text style={styles.emptyText}>Nessuna collection disponibile. Creane una nuova!</Text>
