@@ -15,6 +15,8 @@ import { useDispatch } from 'react-redux';
 import { addRequestToCollection } from '@/store/collectionsSlice';
 import { Ionicons } from '@expo/vector-icons';
 import HeaderText from '@/components/HeaderText';
+import RequestAuthentication, { AuthType } from '@/components/RequestAuthentication';
+import AuthenticationModal from '@/components/AuthenticationModal';
 
 interface FileData {
   uri: string;
@@ -61,44 +63,73 @@ interface KeyValuePair {
   file?: FileData;
 }
 
+interface AuthConfig {
+  type: AuthType;
+  username?: string;
+  password?: string;
+  apiKey?: string;
+  apiKeyName?: string;
+}
+
+interface RequestState {
+  method: HttpMethod;
+  url: string;
+  timestamp: number;
+  status: number;
+  headers: Header[];
+  body: string;
+  bodyType: BodyType;
+  formData: FormDataItem[];
+  response: ResponseData | null;
+  authConfig: AuthConfig;
+}
+
 export default function RequestScreen() {
   const params = useLocalSearchParams();
   
-  const [url, setUrl] = useState('https://jsonplaceholder.typicode.com/todos/1');
-  const [method, setMethod] = useState<HttpMethod>('GET');
-  const [headers, setHeaders] = useState<Header[]>([{ key: '', value: '', isFile: false }]);
-  const [body, setBody] = useState('');
-  const [bodyType, setBodyType] = useState<BodyType>('raw');
-  const [formData, setFormData] = useState<FormDataItem[]>([
-    { key: '', type: 'text', value: '' }
-  ]);
-  const [response, setResponse] = useState<ResponseData | null>(null);
+  const [request, setRequest] = useState<RequestState>({
+    method: 'GET',
+    url: 'https://jsonplaceholder.typicode.com/todos/1',
+    timestamp: Date.now(),
+    status: 0,
+    headers: [{ key: '', value: '', isFile: false }],
+    body: '',
+    bodyType: 'raw',
+    formData: [
+      { key: '', type: 'text', value: '' }
+    ],
+    response: null,
+    authConfig: {
+      type: 'none'
+    }
+  });
   const { saveRequest } = useRequestHistory();
 
   const saveToCollectionRef = useRef<BottomSheetModal>(null);
   const dispatch = useDispatch();
 
   const [isLoading, setIsLoading] = useState(false);
+  const authModalRef = useRef<BottomSheetModal>(null);
 
   useEffect(() => {
     if (params.url) {
-      setUrl(params.url.toString());
+      setRequest(prev => ({ ...prev, url: params.url.toString() }));
     }
     if (params.method) {
-      setMethod(params.method as HttpMethod);
+      setRequest(prev => ({ ...prev, method: params.method as HttpMethod }));
     }
     if (params.headers) {
-      setHeaders(JSON.parse(params.headers.toString()));
+      setRequest(prev => ({ ...prev, headers: JSON.parse(params.headers.toString()) }));
     }
     if (params.body) {
-      setBody(params.body.toString());
+      setRequest(prev => ({ ...prev, body: params.body.toString() }));
     }
   }, [params.url, params.method, params.headers, params.body]);
 
   const handleSendRequest = async () => {
     try {
       setIsLoading(true);
-      const headersObj = headers.reduce<Record<string, string>>((acc, { key, value }) => {
+      const headersObj = request.headers.reduce<Record<string, string>>((acc, { key, value }) => {
         if (key) acc[key] = value;
         return acc;
       }, {});
@@ -107,12 +138,12 @@ export default function RequestScreen() {
       
       let requestBody: string | FormData | undefined;
       
-      if (method === 'POST' || method === 'PUT') {
-        if (bodyType === 'raw') {
-          requestBody = body;
+      if (request.method === 'POST' || request.method === 'PUT') {
+        if (request.bodyType === 'raw') {
+          requestBody = request.body;
         } else {
           const formDataObj = new FormData();
-          formData.forEach(({ key, type, value, file }) => {
+          request.formData.forEach(({ key, type, value, file }) => {
             if (key) {
               if (type === 'file' && file) {
                 formDataObj.append(key, {
@@ -130,12 +161,15 @@ export default function RequestScreen() {
         }
       }
       
-      const res = await fetch(url, {
-        method,
-        headers: bodyType === 'raw' ? headersObj : {
-          ...Object.fromEntries(
-            Object.entries(headersObj).filter(([key]) => key.toLowerCase() !== 'content-type')
-          ),
+      const res = await fetch(request.url, {
+        method: request.method,
+        headers: {
+          ...headersObj,
+          ...(request.authConfig.type === 'basic' ? {
+            Authorization: `Basic ${btoa(`${request.authConfig.username}:${request.authConfig.password}`)}`
+          } : request.authConfig.type === 'apiKey' ? {
+            [request.authConfig.apiKeyName || 'X-API-Key']: request.authConfig.apiKey || ''
+          } : {}),
           'Accept': 'application/json',
         },
         body: requestBody
@@ -144,29 +178,35 @@ export default function RequestScreen() {
       const endTime = Date.now();
       const responseData = await res.json();
 
-      setResponse({
-        status: res.status,
-        data: responseData,
-        headers: Object.fromEntries(res.headers.entries()),
-        time: endTime - startTime
-      });
+      setRequest(prev => ({
+        ...prev,
+        response: {
+          status: res.status,
+          data: responseData,
+          headers: Object.fromEntries(res.headers.entries()),
+          time: endTime - startTime
+        }
+      }));
 
       saveRequest({
-        method,
-        url,
+        method: request.method,
+        url: request.url,
         timestamp: Date.now(),
         status: res.status,
-        headers: headers,
-        body: bodyType === 'raw' ? body : undefined
+        headers: request.headers,
+        body: request.bodyType === 'raw' ? request.body : undefined
       });
 
       bottomSheetModalRef.current?.present();
 
     } catch (error) {
       if (error instanceof Error) {
-        setResponse({
-          error: error.message
-        });
+        setRequest(prev => ({
+          ...prev,
+          response: {
+            error: error.message
+          }
+        }));
         
         bottomSheetModalRef.current?.present();
       }
@@ -199,8 +239,8 @@ export default function RequestScreen() {
               if (!result.canceled && result.assets[0]) {
                 const fileData = {
                   uri: result.assets[0].uri,
-                  type: 'image/jpeg',
-                  name: 'image.jpg',
+                  type: result.assets[0].mimeType || 'image/jpeg',
+                  name: result.assets[0].fileName || 'image.jpg',
                   size: result.assets[0].fileSize || 0,
                 };
 
@@ -240,22 +280,22 @@ export default function RequestScreen() {
   };
 
   const updateFileData = (fileData: FileData, index: number) => {
-    const newFormData = [...formData];
+    const newFormData = [...request.formData];
     newFormData[index] = { 
       ...newFormData[index], 
       type: 'file',
       value: undefined,
       file: fileData 
     };
-    setFormData(newFormData);
+    setRequest(prev => ({ ...prev, formData: newFormData }));
   };
 
   const handleSaveToCollection = (collectionId: string) => {
     const requestData = {
-      method,
-      url,
-      headers: headers.filter(h => h.key && h.value),
-      body: bodyType === 'raw' ? body : undefined,
+      method: request.method,
+      url: request.url,
+      headers: request.headers.filter(h => h.key && h.value),
+      body: request.bodyType === 'raw' ? request.body : undefined,
       timestamp: Date.now()
     };
     
@@ -265,83 +305,139 @@ export default function RequestScreen() {
   };
 
   const handleFormDataChange = (data: KeyValuePair[]) => {
-    setFormData(data.map(item => ({
-      ...item,
-      type: item.isFile ? 'file' : 'text'
-    })) as FormDataItem[]);
+    setRequest(prev => ({
+      ...prev,
+      formData: data.map(item => ({
+        ...item,
+        type: item.isFile ? 'file' : 'text'
+      })) as FormDataItem[]
+    }));
   };
+
+  const updateAuthHeaders = React.useCallback((newAuthConfig: AuthConfig) => {
+    setRequest(prev => {
+      if (newAuthConfig.type === 'none') {
+        return {
+          ...prev,
+          headers: prev.headers.filter(h => 
+            h.key.toLowerCase() !== 'authorization' && 
+            h.key.toLowerCase() !== (prev.authConfig.apiKeyName || 'x-api-key').toLowerCase()
+          ),
+          authConfig: newAuthConfig
+        };
+      }
+
+      const filteredHeaders = prev.headers.filter(h => 
+        h.key.toLowerCase() !== 'authorization' && 
+        h.key.toLowerCase() !== (prev.authConfig.apiKeyName || 'x-api-key').toLowerCase()
+      );
+
+      let newHeaders = [...filteredHeaders];
+      if (newAuthConfig.type === 'basic' && newAuthConfig.username && newAuthConfig.password) {
+        newHeaders.push({
+          key: 'Authorization',
+          value: `Basic ${btoa(`${newAuthConfig.username}:${newAuthConfig.password}`)}`,
+          isFile: false
+        });
+      } else if (newAuthConfig.type === 'apiKey' && newAuthConfig.apiKey) {
+        newHeaders.push({
+          key: newAuthConfig.apiKeyName || 'X-API-Key',
+          value: newAuthConfig.apiKey,
+          isFile: false
+        });
+      }
+
+      return {
+        ...prev,
+        headers: newHeaders,
+        authConfig: newAuthConfig
+      };
+    });
+  }, []);
+
+  const openAuthModal = useCallback(() => {
+    authModalRef.current?.present();
+  }, []);
 
   return (
     <SafeAreaView style={styles.mainContainer}>
       <HeaderText title="HTTP Client Request" />
-      <GestureHandlerRootView style={styles.container} >
+      <GestureHandlerRootView style={styles.container}>
         <BottomSheetModalProvider>
           <ScrollView style={styles.scrollContainer}>
             <View style={styles.inputContainer}>
-              <MethodPicker selectedValue={method} onValueChange={setMethod} />
+              <MethodPicker selectedValue={request.method} onValueChange={(value) => setRequest(prev => ({ ...prev, method: value }))} />
               <TextInput
                 style={styles.urlInput}
                 placeholder="Enter URL"
-                value={url}
-                onChangeText={setUrl}
+                value={request.url}
+                onChangeText={(value) => setRequest(prev => ({ ...prev, url: value }))}
               />
             </View>
-
-            <Text style={styles.sectionTitle}>Headers</Text>
+            
+            <View style={styles.headerSection}>
+              <Text style={styles.sectionTitle}>Headers</Text>
+              <TouchableOpacity 
+                style={styles.authButton}
+                onPress={openAuthModal}
+              >
+                <Ionicons name="key-outline" size={24} color="#2196F3" />
+              </TouchableOpacity>
+            </View>
             <KeyValueTable 
-              data={headers} 
-              onChange={setHeaders}
+              data={request.headers} 
+              onChange={(value) => setRequest(prev => ({ ...prev, headers: value }))}
               showFileOption={false}
             />
 
-            {(method === 'POST' || method === 'PUT') && (
+            {(request.method === 'POST' || request.method === 'PUT') && (
               <>
                 <Text style={styles.sectionTitle}>Body</Text>
                 <View style={styles.segmentedButtonContainer}>
                   <TouchableOpacity
                     style={[
                       styles.segmentedButton,
-                      bodyType === 'raw' && styles.segmentedButtonActive
+                      request.bodyType === 'raw' && styles.segmentedButtonActive
                     ]}
-                    onPress={() => setBodyType('raw')}
+                    onPress={() => setRequest(prev => ({ ...prev, bodyType: 'raw' }))}
                   >
                     <Text style={[
                       styles.segmentedButtonText,
-                      bodyType === 'raw' && styles.segmentedButtonTextActive
+                      request.bodyType === 'raw' && styles.segmentedButtonTextActive
                     ]}>Raw</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[
                       styles.segmentedButton,
-                      bodyType === 'form-data' && styles.segmentedButtonActive
+                      request.bodyType === 'form-data' && styles.segmentedButtonActive
                     ]}
-                    onPress={() => setBodyType('form-data')}
+                    onPress={() => setRequest(prev => ({ ...prev, bodyType: 'form-data' }))}
                   >
                     <Text style={[
                       styles.segmentedButtonText,
-                      bodyType === 'form-data' && styles.segmentedButtonTextActive
+                      request.bodyType === 'form-data' && styles.segmentedButtonTextActive
                     ]}>Form Data</Text>
                   </TouchableOpacity>
                 </View>
 
-                {bodyType === 'raw' ? (
+                {request.bodyType === 'raw' ? (
                   <TextInput
                     style={styles.bodyInput}
                     multiline
                     numberOfLines={10}
                     placeholder="Raw JSON body"
-                    value={body}
-                    onChangeText={setBody}
+                    value={request.body}
+                    onChangeText={(value) => setRequest(prev => ({ ...prev, body: value }))}
                   />
                 ) : (
                   <KeyValueTable
-                    data={formData.map(item => ({
+                    data={request.formData.map(item => ({
                       key: item.key,
                       value: item.value || '',
                       isFile: item.type === 'file',
                       file: item.file
                     }))}
-                    onChange={handleFormDataChange}
+                    onChange={(value) => handleFormDataChange(value)}
                     showFileOption={true}
                     onFilePick={(index) => handleFilePick(index, 'formData')}
                   />
@@ -392,16 +488,23 @@ export default function RequestScreen() {
               </TouchableOpacity>
             </View>
           </View>
-            <ResponseModal 
-                bottomSheetModalRef={bottomSheetModalRef} 
-                handleSheetChanges={handleSheetChanges} 
-                response={response} 
-            />
-            
-            <SaveToCollectionModal
-              bottomSheetModalRef={saveToCollectionRef}
-              onSave={handleSaveToCollection}
-            />
+
+          <ResponseModal 
+            bottomSheetModalRef={bottomSheetModalRef} 
+            handleSheetChanges={handleSheetChanges} 
+            response={request.response} 
+          />
+          
+          <SaveToCollectionModal
+            bottomSheetModalRef={saveToCollectionRef}
+            onSave={handleSaveToCollection}
+          />
+
+          <AuthenticationModal
+            bottomSheetModalRef={authModalRef}
+            authConfig={request.authConfig}
+            onAuthConfigChange={updateAuthHeaders}
+          />
         </BottomSheetModalProvider>
       </GestureHandlerRootView>
     </SafeAreaView>
@@ -536,5 +639,17 @@ const styles = StyleSheet.create({
   },
   segmentedButtonTextActive: {
     color: '#ffffff',
+  },
+  headerSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginVertical: 12,
+  },
+  authButton: {
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#2196F3',
   },
 });
