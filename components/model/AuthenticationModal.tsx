@@ -1,7 +1,11 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
-import { BottomSheetModal, BottomSheetBackdrop } from '@gorhom/bottom-sheet';
-import RequestAuthentication, { AuthType } from './RequestAuthentication';
+import {
+  BottomSheetBackdrop,
+    BottomSheetModal,
+    BottomSheetView
+} from '@gorhom/bottom-sheet';
+import { StyleSheet, Text, View } from 'react-native';
+import RequestAuthentication, { AuthType } from '../RequestAuthentication';
 
 interface AuthConfig {
   type: AuthType;
@@ -22,32 +26,26 @@ export default function AuthenticationModal({
   authConfig, 
   onAuthConfigChange 
 }: AuthenticationModalProps) {
-  const renderBackdrop = React.useCallback(
-    (props: any) => <BottomSheetBackdrop {...props} pressBehavior="close" />,
-    []
-  );
-
   return (
     <BottomSheetModal
       ref={bottomSheetModalRef}
-      snapPoints={['50%']}
-      index={0}
-      backdropComponent={renderBackdrop}
-      enablePanDownToClose
+      snapPoints={['30%', '50%', '85%']}
+      backdropComponent={(props) => (
+        <BottomSheetBackdrop {...props} enableTouchThrough={true} />
+      )}
     >
-      <View style={styles.container}>
+      <BottomSheetView style={styles.contentContainer}>
         <RequestAuthentication 
           authConfig={authConfig}
           onAuthConfigChange={onAuthConfigChange}
         />
-      </View>
+      </BottomSheetView>
     </BottomSheetModal>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  contentContainer: {
     flex: 1,
-    padding: 16,
   },
 }); 

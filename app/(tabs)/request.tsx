@@ -4,10 +4,10 @@ import React from 'react';
 import { useRequestHistory } from '@/hooks/useRequestHistory';
 import MethodPicker, { HttpMethod } from '@/components/MethodPicker';
 import KeyValueTable from '@/components/KeyValueTable';
-import SaveToCollectionModal from '@/components/SaveToCollectionModal';
+import SaveToCollectionModal from '@/components/model/SaveToCollectionModal';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BottomSheetModal, BottomSheetModalProvider } from '@gorhom/bottom-sheet';
-import ResponseModal from '@/components/ResponseModal';
+import ResponseModal from '@/components/model/ResponseModal';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { useLocalSearchParams } from 'expo-router';
@@ -15,8 +15,8 @@ import { useDispatch } from 'react-redux';
 import { addRequestToCollection } from '@/store/collectionsSlice';
 import { Ionicons } from '@expo/vector-icons';
 import HeaderText from '@/components/HeaderText';
-import RequestAuthentication, { AuthType } from '@/components/RequestAuthentication';
-import AuthenticationModal from '@/components/AuthenticationModal';
+import { AuthType } from '@/components/RequestAuthentication';
+import AuthenticationModal from '@/components/model/AuthenticationModal';
 
 interface FileData {
   uri: string;
@@ -167,8 +167,8 @@ export default function RequestScreen() {
           ...headersObj,
           ...(request.authConfig.type === 'basic' ? {
             Authorization: `Basic ${btoa(`${request.authConfig.username}:${request.authConfig.password}`)}`
-          } : request.authConfig.type === 'apiKey' ? {
-            [request.authConfig.apiKeyName || 'X-API-Key']: request.authConfig.apiKey || ''
+          } : request.authConfig.type === 'apiKey' && request.authConfig.apiKey ? {
+            Authorization: `Bearer ${request.authConfig.apiKey}`
           } : {}),
           'Accept': 'application/json',
         },
@@ -231,8 +231,8 @@ export default function RequestScreen() {
             text: 'Foto',
             onPress: async () => {
               const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.All,
-                allowsEditing: true,
+                mediaTypes: ['images'],
+                allowsEditing: false,
                 quality: 1,
               });
 
@@ -320,16 +320,14 @@ export default function RequestScreen() {
         return {
           ...prev,
           headers: prev.headers.filter(h => 
-            h.key.toLowerCase() !== 'authorization' && 
-            h.key.toLowerCase() !== (prev.authConfig.apiKeyName || 'x-api-key').toLowerCase()
+            h.key.toLowerCase() !== 'authorization'
           ),
           authConfig: newAuthConfig
         };
       }
 
       const filteredHeaders = prev.headers.filter(h => 
-        h.key.toLowerCase() !== 'authorization' && 
-        h.key.toLowerCase() !== (prev.authConfig.apiKeyName || 'x-api-key').toLowerCase()
+        h.key.toLowerCase() !== 'authorization'
       );
 
       let newHeaders = [...filteredHeaders];
@@ -341,8 +339,8 @@ export default function RequestScreen() {
         });
       } else if (newAuthConfig.type === 'apiKey' && newAuthConfig.apiKey) {
         newHeaders.push({
-          key: newAuthConfig.apiKeyName || 'X-API-Key',
-          value: newAuthConfig.apiKey,
+          key: 'Authorization',
+          value: `Bearer ${newAuthConfig.apiKey}`,
           isFile: false
         });
       }

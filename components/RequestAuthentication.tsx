@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
+import React from 'react';
+import { View, Text, StyleSheet, TextInput } from 'react-native';
+import SegmentedControl from '@react-native-segmented-control/segmented-control';
 
 export type AuthType = 'basic' | 'apiKey' | 'none';
 
@@ -18,23 +18,34 @@ interface RequestAuthenticationProps {
 }
 
 export default function RequestAuthentication({ authConfig, onAuthConfigChange }: RequestAuthenticationProps) {
-  const handleAuthTypeChange = (type: AuthType) => {
-    onAuthConfigChange({ ...authConfig, type });
+  const authTypes = ['Nessuna', 'Basic Auth', 'API Key'];
+  const authValues: AuthType[] = ['none', 'basic', 'apiKey'];
+
+  const handleAuthTypeChange = (index: number) => {
+    const type = authValues[index];
+    const newConfig = {
+      type,
+      username: undefined,
+      password: undefined,
+      apiKey: undefined,
+      apiKeyName: undefined
+    };
+    onAuthConfigChange(newConfig);
   };
+
+  const selectedIndex = authValues.indexOf(authConfig.type);
 
   return (
     <View style={styles.container}>
-      <View style={styles.pickerContainer}>
-        <Picker
-          selectedValue={authConfig.type}
-          onValueChange={handleAuthTypeChange}
-          style={styles.picker}
-        >
-          <Picker.Item label="Nessuna" value="none" />
-          <Picker.Item label="Basic Auth" value="basic" />
-          <Picker.Item label="API Key" value="apiKey" />
-        </Picker>
-      </View>
+      <Text style={styles.label}>Tipo di Autenticazione</Text>
+      <SegmentedControl
+        values={authTypes}
+        selectedIndex={selectedIndex}
+        onChange={(event) => {
+          handleAuthTypeChange(event.nativeEvent.selectedSegmentIndex);
+        }}
+        style={styles.segmentedControl}
+      />
 
       {authConfig.type === 'basic' && (
         <View style={styles.inputGroup}>
@@ -85,15 +96,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 8,
+    color: '#333',
   },
-  pickerContainer: {
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
+  segmentedControl: {
     marginBottom: 16,
-  },
-  picker: {
-    height: 50,
   },
   inputGroup: {
     gap: 8,

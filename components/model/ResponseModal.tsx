@@ -1,11 +1,12 @@
 import React from 'react';
 import {
+    BottomSheetBackdrop,
     BottomSheetModal,
     BottomSheetView
 } from '@gorhom/bottom-sheet';
 import { Text, StyleSheet, ScrollView, View } from 'react-native';
-import CollapsibleSection from './CollapsibleSection';
-import JsonViewer from './JsonViewer';
+import CollapsibleSection from '../CollapsibleSection';
+import JsonViewer from '../JsonViewer';
 
 interface ResponseData {
     error?: string;
@@ -26,16 +27,19 @@ export default function ResponseModal({ bottomSheetModalRef, handleSheetChanges,
         <BottomSheetModal
             ref={bottomSheetModalRef}
             onChange={handleSheetChanges}
-            snapPoints={['50%', '90%']}
+            snapPoints={['40%', '80%']}
             enableDynamicSizing={true}
             enablePanDownToClose={true}
+            backdropComponent={(props) => (
+                <BottomSheetBackdrop {...props} enableTouchThrough={true} />
+            )}
         >
             <BottomSheetView style={styles.contentContainer}>
                 {response ? (
                     response.error ? (
                         <Text style={styles.errorText}>Errore: {response.error}</Text>
                     ) : (
-                        <ScrollView style={styles.scrollView}>
+                        <>
                             <View style={styles.statusContainer}>
                                 <Text style={[
                                     styles.statusText,
@@ -45,15 +49,17 @@ export default function ResponseModal({ bottomSheetModalRef, handleSheetChanges,
                                 </Text>
                                 <Text style={styles.timeText}>{response.time}ms</Text>
                             </View>
+                            <ScrollView style={styles.scrollView}>
 
-                            <CollapsibleSection title="Headers">
-                                <JsonViewer data={response.headers || {}} />
-                            </CollapsibleSection>
+                                <CollapsibleSection title="Headers">
+                                    <JsonViewer data={response.headers || {}} />
+                                </CollapsibleSection>
 
-                            <CollapsibleSection title="Body" initiallyExpanded={true}>
-                                <JsonViewer data={response.data || null} />
-                            </CollapsibleSection>
-                        </ScrollView>
+                                <CollapsibleSection title="Body" initiallyExpanded={true}>
+                                    <JsonViewer data={response.data || null} />
+                                </CollapsibleSection>
+                            </ScrollView>
+                        </>
                     )
                 ) : (
                     <Text style={styles.emptyText}>Nessuna risposta disponibile</Text>
